@@ -3,9 +3,9 @@ import streamlit as st
 import io
 
 # --- Page Config ---
-st.set_page_config(layout="wide", page_title="MAYA AI: ACCURACY AUDITOR v35.4")
+st.set_page_config(layout="wide", page_title="MAYA AI: DUAL-SYNC v35.5")
 
-# --- Custom Styling (Fixed Logic - Restore Grapics) ---
+# --- Custom Styling (STRICTLY NO LOGIC CHANGE) ---
 st.markdown("""
     <style>
     .compact-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
@@ -14,13 +14,13 @@ st.markdown("""
     .v24-box { background: #263238; color: #00E676; border-left: 3px solid #00E676; }
     .super-hit { background: radial-gradient(circle, #FFD700, #FFA000) !important; color: black !important; box-shadow: 0px 0px 8px #FFD700; }
     .vvip-match { border: 2px solid #FF5252 !important; background: #FFEBEE !important; color: #B71C1C !important; }
-    .conf-meter { background: #111; color: gold; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 15px; border: 1px solid gold; font-size: 18px; }
-    .accuracy-tag { background: #004D40; color: #00E676; padding: 4px 10px; border-radius: 4px; font-size: 14px; margin-bottom: 10px; display: inline-block; border: 1px solid #00E676;}
-    .pass-tick { color: #2E7D32; font-weight: bold; font-size: 14px; }
+    .header-info { background: #004D40; color: #00E676; padding: 10px; border-radius: 5px; border: 1px solid #00E676; margin-bottom: 10px;}
+    .pass-tick { color: #00FF00; font-weight: bold; font-size: 14px; }
+    .result-display { color: gold; font-size: 20px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- INTERNAL RULES (STRICTLY NO CHANGE) ---
+# --- INTERNAL RULES (UNCHANGED) ---
 MASTER_RULES = {
     'DS': {1:['0','5'], 2:['1','6','9'], 3:['2','7','3'], 4:['4','8','0']},
     'FD': {1:['4','9','2'], 2:['0','5','7'], 3:['1','6','3'], 4:['8','2','9']},
@@ -88,7 +88,7 @@ def run_engine(df_json, t_date_str, target_shift, engine_ver):
         return final, gold
     return final, set()
 
-# --- SIDEBAR CONTROL ---
+# --- SIDEBAR (FREEZE) ---
 with st.sidebar:
     st.header("⚙️ Controls")
     uploaded_file = st.file_uploader("Upload Master File", type=['xlsx', 'csv'])
@@ -100,70 +100,79 @@ with st.sidebar:
 
 # --- MAIN APP ---
 if uploaded_file:
-    st.markdown(f"<div class='conf-meter'>📅 DATE: {t_date.strftime('%d-%b-%Y')} | Market Analysis</div>", unsafe_allow_html=True)
     tabs = st.tabs(["DS", "FD", "GD", "GL", "DB", "SG"])
     shifts = ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']
 
     for idx, s_name in enumerate(shifts):
         with tabs[idx]:
-            # Restore Percentage Meter
+            # 1. ACTUAL RESULT DISPLAY (FIXED AT TOP)
+            actual_row = df_raw[df_raw['DATE'] == pd.to_datetime(t_date)]
+            actual = clean_val(actual_row[s_name].values[0]) if not actual_row.empty else ""
             c_score = calculate_confidence(s_name, t_date)
-            st.markdown(f"<div class='accuracy-tag'>🎯 Shift Confidence: {c_score}% (War/Date Match)</div>", unsafe_allow_html=True)
             
+            st.markdown(f"""
+                <div class='header-info'>
+                    🎯 Confidence: {c_score}% | Week: {get_week_num(t_date)} | Day: {t_date.strftime('%A')}<br>
+                    <span class='result-display'>RESULT: {actual if actual else 'WAITING'}</span>
+                </div>
+            """, unsafe_allow_html=True)
+
+            # 2. RUN BOTH ENGINES
             p33, g33 = run_engine(df_json, str(t_date), s_name, 'v33')
             p24, _ = run_engine(df_json, str(t_date), s_name, 'v24')
             common = p33.intersection(p24)
-            
-            # Grids
+
+            # 3. SIDE-BY-SIDE PREDICTIONS WITH ✅ TICKS
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Engine v33 (7-Year Master)**")
                 h = "<div class='compact-grid'>"
                 for p in sorted(list(p33)):
+                    is_match = (p == actual and actual != "")
                     cls = "item-box v33-box " + ("super-hit" if p in g33 else "")
                     if p in common: cls += " vvip-match"
-                    h += f"<div class='{cls}'>{p}</div>"
+                    tick = " ✅" if is_match else ""
+                    h += f"<div class='{cls}'>{p}{tick}</div>"
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
             with col2:
                 st.markdown("**Engine v24 (Historical Audit)**")
                 h = "<div class='compact-grid'>"
                 for p in sorted(list(p24)):
+                    is_match = (p == actual and actual != "")
                     cls = "item-box v24-box " + ("vvip-match" if p in common else "")
-                    h += f"<div class='{cls}'>{p}</div>"
+                    tick = " ✅" if is_match else ""
+                    h += f"<div class='{cls}'>{p}{tick}</div>"
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
 
-            # --- FULL TRIPLE HISTORY SYNC ---
+            # --- DUAL SIDE-BY-SIDE HISTORY AUDIT ---
             st.markdown("---")
-            if st.button(f"📊 FULL AUDIT: Search All History ({s_name})"):
-                audit_col1, audit_col2 = st.columns(2)
+            if st.button(f"🔍 VIEW JOINT TRIPLE AUDIT ({s_name})"):
+                h33_col, h24_col = st.columns(2)
                 
-                # Engine v33 Audit Side
-                with audit_col1:
-                    st.info(f"Engine v33: {s_name} Deep Audit")
-                    # Triple history combined for v33
+                # History Engine v33
+                with h33_col:
+                    st.info("Engine v33 Audit")
                     for title, dates in [("Recent Trend (11 Days)", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
                                        (f"War Audit ({t_date.strftime('%A')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(7)['DATE']),
                                        (f"Date Audit ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
                         st.subheader(title)
                         for d in dates:
-                            p, _ = run_engine(df_json, str(d.date()) if hasattr(d, 'date') else str(d), s_name, 'v33')
-                            val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
-                            mark = f"<span class='pass-tick'>✅ {val}</span>" if (val in p and val != "") else val
+                            p_h, _ = run_engine(df_json, str(d.date()) if hasattr(d, 'date') else str(d), s_name, 'v33')
+                            val_h = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
+                            mark = f"<span class='pass-tick'>✅ {val_h}</span>" if (val_h in p_h and val_h != "") else val_h
                             st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : {mark}", unsafe_allow_html=True)
 
-                # Engine v24 Audit Side
-                with audit_col2:
-                    st.info(f"Engine v24: {s_name} Deep Audit")
-                    # Triple history combined for v24
+                # History Engine v24
+                with h24_col:
+                    st.info("Engine v24 Audit")
                     for title, dates in [("Recent Trend (11 Days)", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
                                        (f"War Audit ({t_date.strftime('%A')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(7)['DATE']),
                                        (f"Date Audit ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
                         st.subheader(title)
                         for d in dates:
-                            p, _ = run_engine(df_json, str(d.date()) if hasattr(d, 'date') else str(d), s_name, 'v24')
-                            val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
-                            mark = f"<span class='pass-tick'>✅ {val}</span>" if (val in p and val != "") else val
+                            p_h, _ = run_engine(df_json, str(d.date()) if hasattr(d, 'date') else str(d), s_name, 'v24')
+                            val_h = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
+                            mark = f"<span class='pass-tick'>✅ {val_h}</span>" if (val_h in p_h and val_h != "") else val_h
                             st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : {mark}", unsafe_allow_html=True)
-    
