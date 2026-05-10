@@ -3,9 +3,9 @@ import streamlit as st
 import io
 
 # --- Page Configuration ---
-st.set_page_config(layout="wide", page_title="MAYA AI: DUAL MASTER v35")
+st.set_page_config(layout="wide", page_title="MAYA AI: DUAL MASTER v35.1")
 
-# --- Custom Styling (Fixed Logic - Visual Only) ---
+# --- Custom Styling (STRICTLY NO LOGIC CHANGE) ---
 st.markdown("""
     <style>
     .compact-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
@@ -19,7 +19,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- INTERNAL LOGIC DATA (STRICTLY UNCHANGED) ---
+# --- INTERNAL LOGIC DATA (UNCHANGED) ---
 MASTER_RULES = {
     'DS': {1:['0','5'], 2:['1','6','9'], 3:['2','7','3'], 4:['4','8','0']},
     'FD': {1:['4','9','2'], 2:['0','5','7'], 3:['1','6','3'], 4:['8','2','9']},
@@ -63,13 +63,14 @@ def apply_32(v):
     return {f"{(A+da)%10}{(B+db)%10}" for da, db in PAT}
 
 @st.cache_data
-def run_engine(df_json, t_date, target_shift, engine_ver):
+def run_engine(df_json, t_date_str, target_shift, engine_ver):
     df = pd.read_json(io.StringIO(df_json))
     df['DATE'] = pd.to_datetime(df['DATE'])
     df = df.sort_values('DATE').reset_index(drop=True)
     df['DS'] = df['DS'].shift(-1)
     
-    hist = df[df['DATE'] < pd.to_datetime(t_date)].tail(365)
+    t_date = pd.to_datetime(t_date_str)
+    hist = df[df['DATE'] < t_date].tail(365)
     serial_hits = []
     for src in ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']:
         for lb in range(1, 61):
@@ -79,13 +80,13 @@ def run_engine(df_json, t_date, target_shift, engine_ver):
     serial_hits.sort(key=lambda x: x[1], reverse=True)
     toppers, losers = (serial_hits[:4], serial_hits[-7:]) if engine_ver == 'v33' else (serial_hits[:4], serial_hits[-5:])
     
-    curr_h = df[df['DATE'] < pd.to_datetime(t_date)]
+    curr_h = df[df['DATE'] < t_date]
     top_p = set().union(*(apply_32(clean_val(curr_h.iloc[-lb][src])) for (src, lb), h in toppers))
     min_p = set().union(*(apply_32(clean_val(curr_h.iloc[-lb][src])) for (src, lb), h in losers))
     final = top_p - min_p
     
     if engine_ver == 'v33':
-        week = get_week_num(pd.to_datetime(t_date))
+        week = get_week_num(t_date)
         gold = {p for p in final if any(d in p for d in MASTER_RULES[target_shift][week])}
         return final, gold
     return final, set()
@@ -103,7 +104,6 @@ with st.sidebar:
 
 # --- MAIN APP ---
 if uploaded_file:
-    # Header display fixed on top
     conf_total = sum(calculate_confidence(s, t_date) for s in ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']) // 6
     st.markdown(f"<div class='conf-meter'>📅 DATE: {t_date.strftime('%d-%b-%Y')} | AVG MARKET CONFIDENCE: {conf_total}%</div>", unsafe_allow_html=True)
 
@@ -112,7 +112,6 @@ if uploaded_file:
 
     for idx, s_name in enumerate(shifts):
         with tabs[idx]:
-            # Accuracy Tag for Shift
             c_score = calculate_confidence(s_name, t_date)
             st.markdown(f"<div class='accuracy-tag'>🎯 Shift Confidence: {c_score}% (Week: {get_week_num(t_date)} | Day: {t_date.strftime('%a')})</div>", unsafe_allow_html=True)
             
@@ -141,19 +140,22 @@ if uploaded_file:
 
             st.warning(f"🏆 VVIP Common ({len(common)}): {', '.join(sorted(list(common)))}")
             
-            # --- ON-DEMAND HISTORY BUTTONS ---
             st.markdown("---")
             b1, b2 = st.columns(2)
+            # FIX: `.date()` error fixed here by using `prev` directly
             if b1.button(f"📊 Load v33 History ({s_name})"):
-                for i in range(1, 8):
+                for i in range(1, 12): # 11 din ki history
                     prev = t_date - pd.Timedelta(days=i)
-                    p, _ = run_engine(df_json, str(prev.date()), s_name, 'v33')
-                    val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(prev)][s_name].values[0])
-                    st.write(f"{prev.strftime('%d-%m')} (Week {get_week_num(prev)}): {'✅ ' + val if val in p else val}")
+                    p, _ = run_engine(df_json, str(prev), s_name, 'v33')
+                    row = df_raw[df_raw['DATE'] == pd.to_datetime(prev)]
+                    val = clean_val(row[s_name].values[0]) if not row.empty else ""
+                    st.write(f"{prev.strftime('%d-%m')} (Week {get_week_num(prev)}): {'✅ ' + val if val in p and val != '' else val}")
+            
             if b2.button(f"📊 Load v24 History ({s_name})"):
-                for i in range(1, 8):
+                for i in range(1, 12): # 11 din ki history
                     prev = t_date - pd.Timedelta(days=i)
-                    p, _ = run_engine(df_json, str(prev.date()), s_name, 'v24')
-                    val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(prev)][s_name].values[0])
-                    st.write(f"{prev.strftime('%d-%m')}: {'✅ ' + val if val in p else val}")
-  
+                    p, _ = run_engine(df_json, str(prev), s_name, 'v24')
+                    row = df_raw[df_raw['DATE'] == pd.to_datetime(prev)]
+                    val = clean_val(row[s_name].values[0]) if not row.empty else ""
+                    st.write(f"{prev.strftime('%d-%m')}: {'✅ ' + val if val in p and val != '' else val}")
+    
