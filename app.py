@@ -2,10 +2,10 @@ import pandas as pd
 import streamlit as st
 import io
 
-# --- Page Configuration ---
-st.set_page_config(layout="wide", page_title="MAYA AI: TRIPLE AUDIT DUAL MASTER")
+# --- Page Config ---
+st.set_page_config(layout="wide", page_title="MAYA AI: DUAL ENGINE TRIPLE AUDIT")
 
-# --- Custom Styling (STRICTLY NO LOGIC CHANGE) ---
+# --- Custom Styling (Fixed Logic - No Changes) ---
 st.markdown("""
     <style>
     .compact-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
@@ -14,8 +14,8 @@ st.markdown("""
     .v24-box { background: #263238; color: #00E676; border-left: 3px solid #00E676; }
     .super-hit { background: radial-gradient(circle, #FFD700, #FFA000) !important; color: black !important; box-shadow: 0px 0px 8px #FFD700; }
     .vvip-match { border: 2px solid #FF5252 !important; background: #FFEBEE !important; color: #B71C1C !important; }
-    .conf-meter { background: #111; color: gold; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 15px; border: 1px solid gold; font-size: 18px; }
-    .accuracy-tag { background: #004D40; color: #00E676; padding: 4px 10px; border-radius: 4px; font-size: 14px; margin-bottom: 10px; display: inline-block; border: 1px solid #00E676;}
+    .audit-box { border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: #fdfdfd; margin-bottom: 10px; }
+    .pass-tick { color: #2E7D32; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -29,31 +29,10 @@ MASTER_RULES = {
     'SG': {1:['2','7','4'], 2:['3','8','0'], 3:['1','6','5'], 4:['9','0','2']}
 }
 
-SHIFT_STRENGTH = {
-    'DS': {'Days': ['Tuesday', 'Thursday'], 'Weeks': [2, 4], 'Dates': [1, 11, 21, 31]},
-    'FD': {'Days': ['Wednesday', 'Friday'], 'Weeks': [1, 3], 'Dates': [4, 9, 14, 19]},
-    'GD': {'Days': ['Monday', 'Saturday'], 'Weeks': [2, 3], 'Dates': [3, 8, 13, 18]},
-    'GL': {'Days': ['Tuesday', 'Wednesday'], 'Weeks': [1, 4], 'Dates': [7, 17, 27]},
-    'DB': {'Days': ['Monday', 'Friday'], 'Weeks': [3], 'Dates': [5, 15, 25]},
-    'SG': {'Days': ['Thursday', 'Sunday'], 'Weeks': [2], 'Dates': [2, 12, 22]}
-}
-
 def clean_val(val):
     if pd.isna(val): return ""
     v = "".join(filter(str.isdigit, str(val)))
     return v.zfill(2)[-2:] if v else ""
-
-def get_week_num(dt):
-    d = dt.day
-    return 4 if d > 21 else (d-1)//7 + 1
-
-def calculate_confidence(s_name, t_date):
-    day, week, dt = t_date.strftime('%A'), get_week_num(t_date), t_date.day
-    score = 40
-    if day in SHIFT_STRENGTH[s_name]['Days']: score += 15
-    if week in SHIFT_STRENGTH[s_name]['Weeks']: score += 10
-    if dt in SHIFT_STRENGTH[s_name]['Dates']: score += 10
-    return min(score, 95)
 
 def apply_32(v):
     v = clean_val(v)
@@ -68,7 +47,6 @@ def run_engine(df_json, t_date_str, target_shift, engine_ver):
     df['DATE'] = pd.to_datetime(df['DATE'])
     df = df.sort_values('DATE').reset_index(drop=True)
     df['DS'] = df['DS'].shift(-1)
-    
     t_date = pd.to_datetime(t_date_str)
     hist = df[df['DATE'] < t_date].tail(365)
     serial_hits = []
@@ -76,25 +54,23 @@ def run_engine(df_json, t_date_str, target_shift, engine_ver):
         for lb in range(1, 61):
             hits = sum(1 for i in range(len(hist)-1, 60, -4) if clean_val(hist.iloc[i][target_shift]) in apply_32(clean_val(hist.iloc[i-lb][src])))
             if hits > 0: serial_hits.append(((src, lb), hits))
-    
     serial_hits.sort(key=lambda x: x[1], reverse=True)
     toppers, losers = (serial_hits[:4], serial_hits[-7:]) if engine_ver == 'v33' else (serial_hits[:4], serial_hits[-5:])
-    
     curr_h = df[df['DATE'] < t_date]
     top_p = set().union(*(apply_32(clean_val(curr_h.iloc[-lb][src])) for (src, lb), h in toppers))
     min_p = set().union(*(apply_32(clean_val(curr_h.iloc[-lb][src])) for (src, lb), h in losers))
     final = top_p - min_p
-    
     if engine_ver == 'v33':
-        week = get_week_num(t_date)
-        gold = {p for p in final if any(d in p for d in MASTER_RULES[target_shift][week])}
+        d = t_date.day
+        week = 4 if d > 21 else (d-1)//7 + 1
+        gold = {p for p in final if any(x in p for x in MASTER_RULES[target_shift][week])}
         return final, gold
     return final, set()
 
-# --- SIDEBAR (FREEZE AREA) ---
+# --- SIDEBAR (FREEZE) ---
 with st.sidebar:
-    st.header("⚙️ Dashboard Controls")
-    uploaded_file = st.file_uploader("Upload Master File", type=['xlsx', 'csv'])
+    st.header("⚙️ Controls")
+    uploaded_file = st.file_uploader("Upload File")
     if uploaded_file:
         df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         df_raw['DATE'] = pd.to_datetime(df_raw['DATE'])
@@ -103,23 +79,18 @@ with st.sidebar:
 
 # --- MAIN APP ---
 if uploaded_file:
-    st.markdown(f"<div class='conf-meter'>📅 DATE: {t_date.strftime('%d-%b-%Y')}</div>", unsafe_allow_html=True)
     tabs = st.tabs(["DS", "FD", "GD", "GL", "DB", "SG"])
-    shifts = ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']
-
-    for idx, s_name in enumerate(shifts):
+    for idx, s_name in enumerate(["DS", "FD", "GD", "GL", "DB", "SG"]):
         with tabs[idx]:
-            c_score = calculate_confidence(s_name, t_date)
-            st.markdown(f"<div class='accuracy-tag'>🎯 Shift Confidence: {c_score}%</div>", unsafe_allow_html=True)
-            
             p33, g33 = run_engine(df_json, str(t_date), s_name, 'v33')
             p24, _ = run_engine(df_json, str(t_date), s_name, 'v24')
             common = p33.intersection(p24)
+            actual = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(t_date)][s_name].values[0]) if not df_raw[df_raw['DATE'] == pd.to_datetime(t_date)].empty else ""
             
-            # Prediction Grids
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Engine v33 (7-Year Master)**")
+            st.markdown(f"### Result: {actual}")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Engine v33 (7-Year)**")
                 h = "<div class='compact-grid'>"
                 for p in sorted(list(p33)):
                     cls = "item-box v33-box " + ("super-hit" if p in g33 else "")
@@ -127,8 +98,8 @@ if uploaded_file:
                     h += f"<div class='{cls}'>{p}</div>"
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
-            with col2:
-                st.markdown("**Engine v24 (Historical Audit)**")
+            with c2:
+                st.markdown("**Engine v24 (Audit)**")
                 h = "<div class='compact-grid'>"
                 for p in sorted(list(p24)):
                     cls = "item-box v24-box " + ("vvip-match" if p in common else "")
@@ -136,42 +107,37 @@ if uploaded_file:
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
 
-            # --- TRIPLE HISTORY AUDIT (RESTORED) ---
+            # --- DUAL ENGINE TRIPLE HISTORY ---
             st.markdown("---")
-            if st.button(f"🔍 Load Triple History Audit ({s_name})"):
-                c1, c2, c3 = st.columns(3)
+            col_b1, col_b2 = st.columns(2)
+            show_h33 = col_b1.button(f"🔍 v33 Triple Audit ({s_name})")
+            show_h24 = col_b2.button(f"🔍 v24 Triple Audit ({s_name})")
+
+            if show_h33 or show_h24:
+                h1, h2 = st.columns(2)
+                # Engine v33 History
+                if show_h33:
+                    with h1:
+                        st.info("v33 Historical Triple Audit")
+                        for title, dates in [("Recent 11 Days", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
+                                           (f"Weekday ({t_date.strftime('%A')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(7)['DATE']),
+                                           (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
+                            st.subheader(title)
+                            for d in dates:
+                                p, _ = run_engine(df_json, str(d), s_name, 'v33')
+                                val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
+                                st.write(f"{d.strftime('%d-%m')} : {'✅ ' + val if val in p and val != '' else val}")
+
+                # Engine v24 History
+                if show_h24:
+                    with h2:
+                        st.info("v24 Historical Triple Audit")
+                        for title, dates in [("Recent 11 Days", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
+                                           (f"Weekday ({t_date.strftime('%A')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(7)['DATE']),
+                                           (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
+                            st.subheader(title)
+                            for d in dates:
+                                p, _ = run_engine(df_json, str(d), s_name, 'v24')
+                                val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
+                                st.write(f"{d.strftime('%d-%m')} : {'✅ ' + val if val in p and val != '' else val}")
                 
-                # 1. Recent Trend (11 Days)
-                with c1:
-                    st.subheader("Recent (11 Days)")
-                    for i in range(1, 12):
-                        prev = t_date - pd.Timedelta(days=i)
-                        p33_h, _ = run_engine(df_json, str(prev), s_name, 'v33')
-                        p24_h, _ = run_engine(df_json, str(prev), s_name, 'v24')
-                        val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(prev)][s_name].values[0])
-                        mark = f"✅ {val}" if (val in p33_h or val in p24_h) and val != "" else val
-                        st.write(f"{prev.strftime('%d-%m')} : {mark}")
-
-                # 2. Weekday (War) Audit (Last 7 same days)
-                with c2:
-                    st.subheader(f"War ({t_date.strftime('%A')})")
-                    war_df = df_raw[df_raw['DATE'].dt.day_name() == t_date.strftime('%A')].copy()
-                    war_df = war_df[war_df['DATE'] < pd.to_datetime(t_date)].tail(7).sort_values('DATE', ascending=False)
-                    for _, r in war_df.iterrows():
-                        p33_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v33')
-                        p24_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v24')
-                        val = clean_val(r[s_name])
-                        mark = f"✅ {val}" if (val in p33_h or val in p24_h) and val != "" else val
-                        st.write(f"{r['DATE'].strftime('%d-%m')} : {mark}")
-
-                # 3. Monthly Date Audit (Last 5 same dates)
-                with c3:
-                    st.subheader(f"Date ({t_date.day})")
-                    date_df = df_raw[df_raw['DATE'].dt.day == t_date.day].copy()
-                    date_df = date_df[date_df['DATE'] < pd.to_datetime(t_date)].tail(5).sort_values('DATE', ascending=False)
-                    for _, r in date_df.iterrows():
-                        p33_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v33')
-                        p24_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v24')
-                        val = clean_val(r[s_name])
-                        mark = f"✅ {val}" if (val in p33_h or val in p24_h) and val != "" else val
-                        st.write(f"{r['DATE'].strftime('%m-%Y')} : {mark}")
