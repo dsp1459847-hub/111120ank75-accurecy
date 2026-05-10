@@ -3,22 +3,52 @@ import streamlit as st
 import io
 
 # --- Page Configuration ---
-st.set_page_config(layout="wide", page_title="MAYA AI: PARALLEL GRID v35.6")
+st.set_page_config(layout="wide", page_title="MAYA AI: HORIZONTAL MASTER v35.7")
 
-# --- Custom Styling (Fixed Logic - Logic Protected) ---
+# --- Custom Styling (Dark & Bold Focus) ---
 st.markdown("""
     <style>
-    .compact-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
-    .item-box { font-size: 11px; padding: 4px; text-align: center; border: 1px solid #444; border-radius: 3px; font-weight: bold; }
-    .v33-box { background: #1A237E; color: white; border-left: 3px solid #FFD700; }
-    .v24-box { background: #263238; color: #00E676; border-left: 3px solid #00E676; }
-    .super-hit { background: radial-gradient(circle, #FFD700, #FFA000) !important; color: black !important; }
-    .vvip-match { border: 2px solid #FF5252 !important; background: #FFEBEE !important; }
-    .header-info { background: #000; color: gold; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid gold; margin-bottom: 20px;}
-    .pass-tick { color: #00FF00; font-weight: bold; }
-    /* Horizontal Scroll for History */
-    .scroll-container { display: flex; overflow-x: auto; white-space: nowrap; gap: 20px; padding: 10px; border: 1px solid #444; border-radius: 10px; background: #f0f0f0; }
-    .history-card { min-width: 400px; background: white; padding: 10px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
+    /* Main Digit Boxes */
+    .compact-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+    .item-box { 
+        font-size: 14px; 
+        padding: 6px; 
+        text-align: center; 
+        border-radius: 4px; 
+        font-weight: 900; /* Extra Bold */
+        border: 1px solid #555;
+    }
+    .v33-box { background-color: #0D47A1; color: #FFD600; } /* Dark Blue Background, Gold Text */
+    .v24-box { background-color: #1B5E20; color: #CCFF90; } /* Dark Green Background, Light Green Text */
+    
+    /* Special Status */
+    .super-hit { background: linear-gradient(135deg, #FFD600, #FFA000) !important; color: #000 !important; border: 2px solid #fff !important; }
+    .vvip-match { border: 2px solid #D50000 !important; box-shadow: 0px 0px 5px #D50000; }
+    
+    /* Header & Accuracy */
+    .header-info { background: #000; color: gold; padding: 12px; border-radius: 8px; text-align: center; border: 2px solid gold; margin-bottom: 20px; font-weight: bold; }
+    .accuracy-tag { background: #212121; color: #00E676; padding: 5px 15px; border-radius: 20px; font-size: 14px; border: 1px solid #00E676; font-weight: bold; }
+    .pass-tick { color: #00E676; font-weight: 900; font-size: 16px; }
+
+    /* Horizontal Scroll Container for Shifts */
+    .scroll-wrapper { 
+        display: flex; 
+        overflow-x: auto; 
+        gap: 25px; 
+        padding: 20px 10px; 
+        background-color: #111; 
+        border-radius: 12px;
+    }
+    .shift-card { 
+        min-width: 450px; 
+        background-color: #f8f9fa; 
+        border: 2px solid #333; 
+        border-radius: 10px; 
+        padding: 15px;
+        color: #000;
+    }
+    .history-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+    .history-header { background: #333; color: white; text-align: center; padding: 5px; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -75,8 +105,8 @@ def run_engine(df_json, t_date_str, target_shift, engine_ver):
 
 # --- SIDEBAR CONTROL ---
 with st.sidebar:
-    st.header("⚙️ Settings")
-    uploaded_file = st.file_uploader("Upload Master File", type=['xlsx', 'csv'])
+    st.header("⚙️ Master Controls")
+    uploaded_file = st.file_uploader("Upload File", type=['xlsx', 'csv'])
     if uploaded_file:
         df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         df_raw['DATE'] = pd.to_datetime(df_raw['DATE'])
@@ -85,80 +115,83 @@ with st.sidebar:
 
 # --- MAIN APP ---
 if uploaded_file:
-    st.markdown(f"<div class='header-info'>📅 {t_date.strftime('%d-%b-%Y')} MASTER DASHBOARD</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='header-info'>📅 {t_date.strftime('%d-%b-%Y')} | VVIP DUAL-SYNC MODE</div>", unsafe_allow_html=True)
     
     tabs = st.tabs(["DS", "FD", "GD", "GL", "DB", "SG"])
     shifts = ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']
 
     for idx, s_name in enumerate(shifts):
         with tabs[idx]:
-            # Top Display Result
+            # Result Section
             actual_row = df_raw[df_raw['DATE'] == pd.to_datetime(t_date)]
             actual = clean_val(actual_row[s_name].values[0]) if not actual_row.empty else ""
-            st.markdown(f"### Result: <span style='color:gold'>{actual if actual else '--'}</span>", unsafe_allow_html=True)
+            st.markdown(f"### <span style='color:#00E676'>RESULT: {actual if actual else '---'}</span>", unsafe_allow_html=True)
             
             p33, g33 = run_engine(df_json, str(t_date), s_name, 'v33')
             p24, _ = run_engine(df_json, str(t_date), s_name, 'v24')
             common = p33.intersection(p24)
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("**Engine v33 (Golden)**")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**[Engine v33] Golden Sync**")
                 h = "<div class='compact-grid'>"
                 for p in sorted(list(p33)):
+                    is_hit = (p == actual and actual != "")
                     cls = "item-box v33-box " + ("super-hit" if p in g33 else "")
                     if p in common: cls += " vvip-match"
-                    tick = " ✅" if (p == actual and actual != "") else ""
+                    tick = " ✅" if is_hit else ""
                     h += f"<div class='{cls}'>{p}{tick}</div>"
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
-            with c2:
-                st.markdown("**Engine v24 (Audit)**")
+            with col2:
+                st.markdown("**[Engine v24] Historical Audit**")
                 h = "<div class='compact-grid'>"
                 for p in sorted(list(p24)):
+                    is_hit = (p == actual and actual != "")
                     cls = "item-box v24-box " + ("vvip-match" if p in common else "")
-                    tick = " ✅" if (p == actual and actual != "") else ""
+                    tick = " ✅" if is_hit else ""
                     h += f"<div class='{cls}'>{p}{tick}</div>"
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
 
-    # --- HORIZONTAL SCROLL HISTORY (All Shifts Parallel) ---
+    # --- HORIZONTAL SCROLLING PARALLEL HISTORY ---
     st.markdown("---")
-    st.subheader("📋 ALL SHIFTS JOINT TRIPLE AUDIT (Left-to-Right Scroll)")
+    st.subheader("📋 ALL SHIFTS PARALLEL HISTORY (Scroll Left-to-Right)")
     
-    if st.button("🚀 LOAD ALL HISTORY (Side-by-Side)"):
-        st.markdown("<div class='scroll-container'>", unsafe_allow_html=True)
+    if st.button("🚀 LOAD PARALLEL AUDIT (No Changes to Prediction)"):
+        # Custom Horizontal Scroll implementation
+        scroll_html = "<div class='scroll-wrapper'>"
+        
         for s_name in shifts:
+            st.write(f"--- Processing {s_name} Audit ---")
+            # Logic stays here, but layout is wrapped in a card
             with st.container():
-                st.markdown(f"<div class='history-card'>", unsafe_allow_html=True)
-                st.markdown(f"### 🎰 {s_name} Deep Audit")
+                st.markdown(f"### 🎰 {s_name} Audit Card")
+                h_c1, h_c2 = st.columns(2) # Parallel Columns for v33 vs v24
                 
-                # Create Parallel columns for v33 vs v24 inside each shift
-                aud_col1, aud_col2 = st.columns(2)
-                
-                with aud_col1:
+                with h_c1:
                     st.markdown("**[v33 History]**")
+                    # Triple Audit Tables
                     for title, dates in [("Recent 11D", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
                                        (f"War ({t_date.strftime('%a')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE']),
                                        (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
-                        st.write(f"--- {title} ---")
+                        st.write(f"**{title}**")
                         for d in dates:
                             p, _ = run_engine(df_json, str(d.date()) if hasattr(d, 'date') else str(d), s_name, 'v33')
                             val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
                             mark = f"<span class='pass-tick'>✅ {val}</span>" if (val in p and val != "") else val
                             st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : {mark}", unsafe_allow_html=True)
 
-                with aud_col2:
+                with h_c2:
                     st.markdown("**[v24 History]**")
                     for title, dates in [("Recent 11D", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
                                        (f"War ({t_date.strftime('%a')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE']),
                                        (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
-                        st.write(f"--- {title} ---")
+                        st.write(f"**{title}**")
                         for d in dates:
                             p, _ = run_engine(df_json, str(d.date()) if hasattr(d, 'date') else str(d), s_name, 'v24')
                             val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
                             mark = f"<span class='pass-tick'>✅ {val}</span>" if (val in p and val != "") else val
                             st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : {mark}", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+                st.markdown("---")
             
