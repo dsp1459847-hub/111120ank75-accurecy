@@ -3,7 +3,7 @@ import streamlit as st
 import io
 
 # --- Page Configuration ---
-st.set_page_config(layout="wide", page_title="MAYA AI: DUAL MASTER v35.1")
+st.set_page_config(layout="wide", page_title="MAYA AI: TRIPLE AUDIT DUAL MASTER")
 
 # --- Custom Styling (STRICTLY NO LOGIC CHANGE) ---
 st.markdown("""
@@ -100,25 +100,23 @@ with st.sidebar:
         df_raw['DATE'] = pd.to_datetime(df_raw['DATE'])
         t_date = st.date_input("Target Date", df_raw['DATE'].max())
         df_json = df_raw.to_json()
-        st.success("File & Date Locked")
 
 # --- MAIN APP ---
 if uploaded_file:
-    conf_total = sum(calculate_confidence(s, t_date) for s in ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']) // 6
-    st.markdown(f"<div class='conf-meter'>📅 DATE: {t_date.strftime('%d-%b-%Y')} | AVG MARKET CONFIDENCE: {conf_total}%</div>", unsafe_allow_html=True)
-
+    st.markdown(f"<div class='conf-meter'>📅 DATE: {t_date.strftime('%d-%b-%Y')}</div>", unsafe_allow_html=True)
     tabs = st.tabs(["DS", "FD", "GD", "GL", "DB", "SG"])
     shifts = ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']
 
     for idx, s_name in enumerate(shifts):
         with tabs[idx]:
             c_score = calculate_confidence(s_name, t_date)
-            st.markdown(f"<div class='accuracy-tag'>🎯 Shift Confidence: {c_score}% (Week: {get_week_num(t_date)} | Day: {t_date.strftime('%a')})</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='accuracy-tag'>🎯 Shift Confidence: {c_score}%</div>", unsafe_allow_html=True)
             
             p33, g33 = run_engine(df_json, str(t_date), s_name, 'v33')
             p24, _ = run_engine(df_json, str(t_date), s_name, 'v24')
             common = p33.intersection(p24)
             
+            # Prediction Grids
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown("**Engine v33 (7-Year Master)**")
@@ -138,24 +136,42 @@ if uploaded_file:
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
 
-            st.warning(f"🏆 VVIP Common ({len(common)}): {', '.join(sorted(list(common)))}")
-            
+            # --- TRIPLE HISTORY AUDIT (RESTORED) ---
             st.markdown("---")
-            b1, b2 = st.columns(2)
-            # FIX: `.date()` error fixed here by using `prev` directly
-            if b1.button(f"📊 Load v33 History ({s_name})"):
-                for i in range(1, 12): # 11 din ki history
-                    prev = t_date - pd.Timedelta(days=i)
-                    p, _ = run_engine(df_json, str(prev), s_name, 'v33')
-                    row = df_raw[df_raw['DATE'] == pd.to_datetime(prev)]
-                    val = clean_val(row[s_name].values[0]) if not row.empty else ""
-                    st.write(f"{prev.strftime('%d-%m')} (Week {get_week_num(prev)}): {'✅ ' + val if val in p and val != '' else val}")
-            
-            if b2.button(f"📊 Load v24 History ({s_name})"):
-                for i in range(1, 12): # 11 din ki history
-                    prev = t_date - pd.Timedelta(days=i)
-                    p, _ = run_engine(df_json, str(prev), s_name, 'v24')
-                    row = df_raw[df_raw['DATE'] == pd.to_datetime(prev)]
-                    val = clean_val(row[s_name].values[0]) if not row.empty else ""
-                    st.write(f"{prev.strftime('%d-%m')}: {'✅ ' + val if val in p and val != '' else val}")
-    
+            if st.button(f"🔍 Load Triple History Audit ({s_name})"):
+                c1, c2, c3 = st.columns(3)
+                
+                # 1. Recent Trend (11 Days)
+                with c1:
+                    st.subheader("Recent (11 Days)")
+                    for i in range(1, 12):
+                        prev = t_date - pd.Timedelta(days=i)
+                        p33_h, _ = run_engine(df_json, str(prev), s_name, 'v33')
+                        p24_h, _ = run_engine(df_json, str(prev), s_name, 'v24')
+                        val = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(prev)][s_name].values[0])
+                        mark = f"✅ {val}" if (val in p33_h or val in p24_h) and val != "" else val
+                        st.write(f"{prev.strftime('%d-%m')} : {mark}")
+
+                # 2. Weekday (War) Audit (Last 7 same days)
+                with c2:
+                    st.subheader(f"War ({t_date.strftime('%A')})")
+                    war_df = df_raw[df_raw['DATE'].dt.day_name() == t_date.strftime('%A')].copy()
+                    war_df = war_df[war_df['DATE'] < pd.to_datetime(t_date)].tail(7).sort_values('DATE', ascending=False)
+                    for _, r in war_df.iterrows():
+                        p33_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v33')
+                        p24_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v24')
+                        val = clean_val(r[s_name])
+                        mark = f"✅ {val}" if (val in p33_h or val in p24_h) and val != "" else val
+                        st.write(f"{r['DATE'].strftime('%d-%m')} : {mark}")
+
+                # 3. Monthly Date Audit (Last 5 same dates)
+                with c3:
+                    st.subheader(f"Date ({t_date.day})")
+                    date_df = df_raw[df_raw['DATE'].dt.day == t_date.day].copy()
+                    date_df = date_df[date_df['DATE'] < pd.to_datetime(t_date)].tail(5).sort_values('DATE', ascending=False)
+                    for _, r in date_df.iterrows():
+                        p33_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v33')
+                        p24_h, _ = run_engine(df_json, str(r['DATE']), s_name, 'v24')
+                        val = clean_val(r[s_name])
+                        mark = f"✅ {val}" if (val in p33_h or val in p24_h) and val != "" else val
+                        st.write(f"{r['DATE'].strftime('%m-%Y')} : {mark}")
