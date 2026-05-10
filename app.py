@@ -3,9 +3,9 @@ import streamlit as st
 import io
 
 # --- Page Configuration ---
-st.set_page_config(layout="wide", page_title="MAYA AI: PARALLEL HISTORY v35.10")
+st.set_page_config(layout="wide", page_title="MAYA AI: FIXED PARALLEL v35.11")
 
-# --- Custom Styling (Bold & Dark) ---
+# --- Custom Styling ---
 st.markdown("""
     <style>
     .compact-grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
@@ -19,14 +19,12 @@ st.markdown("""
     .pass-status { color: #00FF00; font-weight: bold; border: 1px solid #00FF00; padding: 2px 8px; border-radius: 4px; font-size: 16px; margin-left: 10px; }
     .fail-status { color: #FF5252; font-weight: bold; border: 1px solid #FF5252; padding: 2px 8px; border-radius: 4px; font-size: 16px; margin-left: 10px; }
     .pass-tick { color: #00FF00; font-weight: 900; }
-
-    /* History Layout */
-    .history-card { background: #f8f9fa; border: 1px solid #ccc; padding: 10px; border-radius: 8px; margin-bottom: 15px; color: #000; }
-    .engine-col { width: 49%; display: inline-block; vertical-align: top; border-right: 1px solid #eee; padding: 5px; }
+    
+    .history-card { background: #f8f9fa; border: 2px solid #333; padding: 15px; border-radius: 10px; margin-bottom: 20px; color: #000; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- INTERNAL LOGIC (STRICTLY NO CHANGE) ---
+# --- INTERNAL LOGIC (STRICTLY UNCHANGED) ---
 MASTER_RULES = {
     'DS': {1:['0','5'], 2:['1','6','9'], 3:['2','7','3'], 4:['4','8','0']},
     'FD': {1:['4','9','2'], 2:['0','5','7'], 3:['1','6','3'], 4:['8','2','9']},
@@ -76,16 +74,16 @@ def run_engine(df_json, t_date_str, target_shift, engine_ver):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    uploaded_file = st.file_uploader("Upload File", type=['xlsx', 'csv'])
+    uploaded_file = st.file_uploader("Upload Master File", type=['xlsx', 'csv'])
     if uploaded_file:
         df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         df_raw['DATE'] = pd.to_datetime(df_raw['DATE'])
-        t_date = st.date_input("Target Date", df_raw['DATE'].max())
+        t_date = st.date_input("Select Date", df_raw['DATE'].max())
         df_json = df_raw.to_json()
 
 # --- MAIN APP ---
 if uploaded_file:
-    st.markdown(f"<div class='header-info'>📅 {t_date.strftime('%d-%b-%Y')} DASHBOARD</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='header-info'>📅 {t_date.strftime('%d-%b-%Y')} MASTER DASHBOARD</div>", unsafe_allow_html=True)
     tabs = st.tabs(["DS", "FD", "GD", "GL", "DB", "SG"])
     shifts = ['DS', 'FD', 'GD', 'GL', 'DB', 'SG']
 
@@ -97,10 +95,9 @@ if uploaded_file:
             p24, _ = run_engine(df_json, str(t_date), s_name, 'v24')
             common = p33.intersection(p24)
             
-            # Result Section with Pass/Fail Label
+            # Result Section
             status_33 = f"<span class='pass-status'>v33: PASS ✅</span>" if actual in p33 and actual!="" else f"<span class='fail-status'>v33: FAIL ❌</span>"
             status_24 = f"<span class='pass-status'>v24: PASS ✅</span>" if actual in p24 and actual!="" else f"<span class='fail-status'>v24: FAIL ❌</span>"
-            
             st.markdown(f"### RESULT: <span style='color:gold'>{actual if actual else '--'}</span> {status_33} {status_24}", unsafe_allow_html=True)
             
             col1, col2 = st.columns(2)
@@ -124,43 +121,43 @@ if uploaded_file:
                 h += "</div>"
                 st.markdown(h, unsafe_allow_html=True)
 
-    # --- PARALLEL HISTORY SECTION ---
+    # --- FIXED PARALLEL HISTORY SECTION ---
     st.markdown("---")
-    st.subheader("📋 DEEP AUDIT HISTORY (v33 & v24 Parallel)")
+    st.subheader("📋 DEEP AUDIT: v33 vs v24 (Parallel View)")
     
-    if st.button("🚀 LOAD HISTORY"):
+    if st.button("🚀 LOAD TRIPLE AUDIT HISTORY"):
         for s_name in shifts:
             st.markdown(f"<div class='history-card'>", unsafe_allow_html=True)
-            st.markdown(f"### 🎰 {s_name} Audit", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='text-align:center; border-bottom:2px solid #333;'>🎰 {s_name} Audit</h2>", unsafe_allow_html=True)
             
-            # Side-by-Side Containers
-            st.markdown("<div style='display:flex; gap:10px;'>", unsafe_allow_html=True)
+            # Direct Streamlit Columns for 100% Parallel Display
+            aud_c1, aud_c2 = st.columns(2)
             
-            # Left: v33
-            st.markdown("<div class='engine-col'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color:#0D47A1;'>Engine v33</h4>", unsafe_allow_html=True)
-            for title, dates in [("Recent 11D", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
-                               (f"War ({t_date.strftime('%a')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE']),
-                               (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
-                st.write(f"**{title}**")
-                for d in dates:
-                    p_h, _ = run_engine(df_json, str(pd.to_datetime(d).date()), s_name, 'v33')
-                    val_h = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
-                    tick = " <span class='pass-tick'>✅</span>" if (val_h in p_h and val_h != "") else ""
-                    st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : **{val_h}**{tick}", unsafe_allow_html=True)
+            with aud_c1:
+                st.markdown("<h4 style='color:#0D47A1; text-align:center;'>Engine v33</h4>", unsafe_allow_html=True)
+                # Triple history for v33
+                for title, dates in [("Recent 11 Days", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
+                                   (f"War ({t_date.strftime('%a')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(10)['DATE']),
+                                   (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(10)['DATE'])]:
+                    st.write(f"**{title}**")
+                    for d in dates:
+                        p_h, _ = run_engine(df_json, str(pd.to_datetime(d).date()), s_name, 'v33')
+                        val_h = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
+                        tick = " <span class='pass-tick'>✅</span>" if (val_h in p_h and val_h != "") else ""
+                        st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : **{val_h}**{tick}", unsafe_allow_html=True)
+
+            with aud_c2:
+                st.markdown("<h4 style='color:#1B5E20; text-align:center;'>Engine v24</h4>", unsafe_allow_html=True)
+                # Triple history for v24
+                for title, dates in [("Recent 11 Days", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
+                                   (f"War ({t_date.strftime('%a')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(10)['DATE']),
+                                   (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(10)['DATE'])]:
+                    st.write(f"**{title}**")
+                    for d in dates:
+                        p_h, _ = run_engine(df_json, str(pd.to_datetime(d).date()), s_name, 'v24')
+                        val_h = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
+                        tick = " <span class='pass-tick'>✅</span>" if (val_h in p_h and val_h != "") else ""
+                        st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : **{val_h}**{tick}", unsafe_allow_html=True)
+            
             st.markdown("</div>", unsafe_allow_html=True)
-            
-            # Right: v24
-            st.markdown("<div class='engine-col' style='border-right:none;'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color:#1B5E20;'>Engine v24</h4>", unsafe_allow_html=True)
-            for title, dates in [("Recent 11D", [t_date - pd.Timedelta(days=i) for i in range(1, 12)]),
-                               (f"War ({t_date.strftime('%a')})", df_raw[(df_raw['DATE'].dt.day_name()==t_date.strftime('%A')) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE']),
-                               (f"Date ({t_date.day})", df_raw[(df_raw['DATE'].dt.day==t_date.day) & (df_raw['DATE']<pd.to_datetime(t_date))].tail(5)['DATE'])]:
-                st.write(f"**{title}**")
-                for d in dates:
-                    p_h, _ = run_engine(df_json, str(pd.to_datetime(d).date()), s_name, 'v24')
-                    val_h = clean_val(df_raw[df_raw['DATE'] == pd.to_datetime(d)][s_name].values[0])
-                    tick = " <span class='pass-tick'>✅</span>" if (val_h in p_h and val_h != "") else ""
-                    st.markdown(f"{pd.to_datetime(d).strftime('%d-%m')} : **{val_h}**{tick}", unsafe_allow_html=True)
-            st.markdown("</div></div></div>", unsafe_allow_html=True)
-            
+    
